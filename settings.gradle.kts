@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MiniTask"
 include(":app")
+include(":baselineprofile")

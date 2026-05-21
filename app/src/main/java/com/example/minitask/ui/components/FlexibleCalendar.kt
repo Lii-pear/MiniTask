@@ -1,13 +1,11 @@
 package com.example.minitask.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
+import android.os.SystemClock
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,7 +37,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -47,7 +47,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -56,37 +58,28 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.minitask.core.calendar.LunarDateCache
 import com.example.minitask.data.model.CalendarMemo
-import com.nlf.calendar.Solar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.YearMonth
-import java.util.concurrent.ConcurrentHashMap
-
-@Immutable
-data class MemosWrapper(val list: List<CalendarMemo>)
+import java.util.LinkedHashMap
+import kotlin.math.abs
 
 @Immutable
 data class ColorsWrapper(val map: Map<String, Long>)
 
-object LunarDateCache {
-    private val cache = ConcurrentHashMap<LocalDate, String>()
-
-    fun getText(date: LocalDate): String {
-        return cache.getOrPut(date) {
-            val solar = Solar.fromYmd(date.year, date.monthValue, date.dayOfMonth)
-            val lunar = solar.lunar
-            val solarFestivals = solar.festivals
-            if (solarFestivals.isNotEmpty()) return@getOrPut solarFestivals[0]
-            val lunarFestivals = lunar.festivals
-            if (lunarFestivals.isNotEmpty()) return@getOrPut lunarFestivals[0]
-            val jieQi = lunar.jieQi
-            if (jieQi.isNotEmpty()) return@getOrPut jieQi
-            if (lunar.day == 1) return@getOrPut lunar.monthInChinese + "月"
-            lunar.dayInChinese
-        }
-    }
-}
+@Immutable
+private data class CalendarDayUiModel(
+    val date: LocalDate,
+    val isCurrentMonth: Boolean,
+    val memos: List<CalendarMemo>,
+    val badgeType: Int?,
+    val lunarText: String
+)
 
 private val staticMemoTextStyle = TextStyle(
     platformStyle = PlatformTextStyle(includeFontPadding = false),
@@ -100,6 +93,73 @@ private val staticBadgeTextStyle = TextStyle(
     platformStyle = PlatformTextStyle(includeFontPadding = false)
 )
 
+private val weekDays = listOf("一", "二", "三", "四", "五", "六", "日")
+
+private class CalendarPageCellsCache(private val maxSize: Int = 18) {
+    private val map = object : LinkedHashMap<YearMonth, List<CalendarDayUiModel>>(maxSize, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<YearMonth, List<CalendarDayUiModel>>?): Boolean {
+            return size > maxSize
+        }
+    }
+
+    fun getOrPut(yearMonth: YearMonth, builder: () -> List<CalendarDayUiModel>): List<CalendarDayUiModel> {
+        return map[yearMonth] ?: builder().also { map[yearMonth] = it }
+    }
+
+    fun clear() {
+        map.clear()
+    }
+}
+
+private fun buildCalendarPageCells(
+    yearMonth: YearMonth,
+    memosByDate: Map<LocalDate, List<CalendarMemo>>,
+    holidayBadgeMap: Map<LocalDate, Int>
+): List<CalendarDayUiModel> {
+    val firstDayOfMonth = yearMonth.atDay(1)
+    val daysInMonth = yearMonth.lengthOfMonth()
+    val startOffset = firstDayOfMonth.dayOfWeek.value - 1
+    val cells = ArrayList<CalendarDayUiModel>(42)
+
+    for (cellIndex in 0 until 42) {
+        val dayOffset = cellIndex - startOffset + 1
+        val isCurrentMonth = dayOffset in 1..daysInMonth
+        val currentDate = when {
+            isCurrentMonth -> yearMonth.atDay(dayOffset)
+            dayOffset < 1 -> yearMonth.minusMonths(1).atEndOfMonth().plusDays(dayOffset.toLong())
+            else -> yearMonth.plusMonths(1).atDay(dayOffset - daysInMonth)
+        }
+
+        cells.add(
+            CalendarDayUiModel(
+                date = currentDate,
+                isCurrentMonth = isCurrentMonth,
+                memos = memosByDate[currentDate].orEmpty(),
+                badgeType = holidayBadgeMap[currentDate],
+                lunarText = if (isCurrentMonth) LunarDateCache.peek(currentDate).orEmpty() else ""
+            )
+        )
+    }
+    return cells
+}
+
+private fun fillCalendarPageLunarText(cells: List<CalendarDayUiModel>): List<CalendarDayUiModel> {
+    var hasUpdate = false
+    val updated = cells.map { cell ->
+        if (cell.isCurrentMonth && cell.lunarText.isEmpty()) {
+            hasUpdate = true
+            cell.copy(lunarText = LunarDateCache.getText(cell.date))
+        } else {
+            cell
+        }
+    }
+    return if (hasUpdate) updated else cells
+}
+
+private fun smoothStep(value: Float): Float {
+    return value * value * (3f - 2f * value)
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FlexibleCalendarGrid(
@@ -112,87 +172,141 @@ fun FlexibleCalendarGrid(
     onDateSelected: (LocalDate) -> Unit,
     onMemoAreaSelected: (LocalDate) -> Unit
 ) {
-    val initialPage = 50000
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { 100000 })
+    val gestureThreshold = 56f
+    val switchCooldownMs = 220L
+
+    val initialPage = 10_000
+    val pageCount = 20_001
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pageCount })
     val coroutineScope = rememberCoroutineScope()
+    val pageCellsCache = remember { CalendarPageCellsCache() }
     val wrappedColors = remember(dynamicMemoColors) { ColorsWrapper(dynamicMemoColors) }
+    val today = remember { LocalDate.now() }
+
+    val modeTransition = updateTransition(targetState = isExpanded, label = "calendarMode")
+    val nonTargetRowsProgress by modeTransition.animateFloat(
+        transitionSpec = {
+            if (targetState) {
+                tween(durationMillis = 260, easing = FastOutSlowInEasing)
+            } else {
+                tween(durationMillis = 180, easing = FastOutSlowInEasing)
+            }
+        },
+        label = "nonTargetRowsProgress"
+    ) { expanded -> if (expanded) 1f else 0f }
+    val headerLiftProgress by modeTransition.animateFloat(
+        transitionSpec = { tween(durationMillis = 240, easing = FastOutSlowInEasing) },
+        label = "headerLiftProgress"
+    ) { expanded -> if (expanded) 1f else 0f }
+    val headerTranslationPx = with(LocalDensity.current) { 4.dp.toPx() }
+    val rowTranslationBasePx = with(LocalDensity.current) { 14.dp.toPx() }
 
     var anchorDate by remember { mutableStateOf(selectedDate) }
     var anchorPage by remember { mutableIntStateOf(initialPage) }
-    var previousIsExpanded by remember { mutableStateOf(isExpanded) }
+    var previousExpanded by remember { mutableStateOf(isExpanded) }
+    var lastSwitchUptimeMs by remember { mutableLongStateOf(0L) }
+    var pageDataVersion by remember { mutableIntStateOf(0) }
+    var isModeSwitchLocked by remember { mutableStateOf(false) }
 
-    // ★ 稳定回退：保留了最稳定的状态同步逻辑
+    LaunchedEffect(memosByDate, holidayBadgeMap) {
+        pageDataVersion++
+        pageCellsCache.clear()
+    }
+
     LaunchedEffect(isExpanded) {
-        if (isExpanded != previousIsExpanded) {
-            val currentOffset = pagerState.currentPage - anchorPage
-            val activeDate = if (previousIsExpanded) {
-                anchorDate.plusMonths(currentOffset.toLong())
+        if (isExpanded != previousExpanded) {
+            isModeSwitchLocked = true
+            val settledPage = pagerState.settledPage
+            val pageOffset = settledPage - anchorPage
+            anchorDate = if (previousExpanded) {
+                anchorDate.plusMonths(pageOffset.toLong())
             } else {
-                anchorDate.plusWeeks(currentOffset.toLong())
+                anchorDate.plusWeeks(pageOffset.toLong())
             }
-            anchorDate = activeDate
-            anchorPage = pagerState.currentPage
-            previousIsExpanded = isExpanded
+            anchorPage = settledPage
+            previousExpanded = isExpanded
+            delay(180)
+            isModeSwitchLocked = false
         }
     }
 
-    // ★ 智能寻路：保留了“滑入本周自动选中今天”的好用功能
     LaunchedEffect(pagerState.settledPage) {
         val offset = pagerState.settledPage - anchorPage
-        if (offset != 0) {
-            val rawDate = if (isExpanded) {
-                anchorDate.plusMonths(offset.toLong())
-            } else {
-                anchorDate.plusWeeks(offset.toLong())
-            }
+        if (offset == 0) return@LaunchedEffect
 
-            val today = LocalDate.now()
-            val finalDate = if (isExpanded) {
-                if (YearMonth.from(rawDate) == YearMonth.from(today)) today else rawDate
-            } else {
-                val rawMonday = rawDate.minusDays(rawDate.dayOfWeek.value.toLong() - 1)
-                val todayMonday = today.minusDays(today.dayOfWeek.value.toLong() - 1)
-                if (rawMonday == todayMonday) today else rawDate
-            }
-
-            anchorDate = finalDate
-            anchorPage = pagerState.settledPage
-            onDateSelected(finalDate)
+        val rawDate = if (isExpanded) {
+            anchorDate.plusMonths(offset.toLong())
+        } else {
+            anchorDate.plusWeeks(offset.toLong())
         }
+
+        val nextDate = if (isExpanded) {
+            if (YearMonth.from(rawDate) == YearMonth.from(today)) today else rawDate
+        } else {
+            val rawMonday = rawDate.minusDays(rawDate.dayOfWeek.value.toLong() - 1)
+            val todayMonday = today.minusDays(today.dayOfWeek.value.toLong() - 1)
+            if (rawMonday == todayMonday) today else rawDate
+        }
+
+        anchorDate = nextDate
+        anchorPage = pagerState.settledPage
+        onDateSelected(nextDate)
     }
 
-    val currentOffset = pagerState.currentPage - anchorPage
-    val activeDate =
-        if (isExpanded) anchorDate.plusMonths(currentOffset.toLong()) else anchorDate.plusWeeks(
-            currentOffset.toLong()
-        )
+    val settledOffset = pagerState.settledPage - anchorPage
+    val activeDate = if (isExpanded) {
+        anchorDate.plusMonths(settledOffset.toLong())
+    } else {
+        anchorDate.plusWeeks(settledOffset.toLong())
+    }
     val viewYearMonth = YearMonth.from(activeDate)
+    val headerYearMonth = if (isExpanded) viewYearMonth else YearMonth.from(selectedDate)
+    val canSwitchMode = !isModeSwitchLocked &&
+        !pagerState.isScrollInProgress &&
+        pagerState.currentPage == pagerState.settledPage
+
+    LaunchedEffect(viewYearMonth) {
+        launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth.minusMonths(1)) }
+        launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth) }
+        launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth.plusMonths(1)) }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White)
-            .animateContentSize(animationSpec = tween(350, easing = FastOutSlowInEasing))
             .padding(top = 16.dp)
-            // ★ 稳定回退：使用系统原生自带的手势探测，放弃底层强拦截，保证绝对稳定
             .pointerInput(isExpanded) {
                 var totalDrag = 0f
                 detectVerticalDragGestures(
                     onDragStart = { totalDrag = 0f },
-                    onVerticalDrag = { _, dragAmount ->
-                        totalDrag += dragAmount
-                        if (totalDrag > 50 && !isExpanded) {
-                            onExpandedChange(true)
+                    onVerticalDrag = { _, dragAmount -> totalDrag += dragAmount },
+                    onDragEnd = {
+                        val isPagerBusy = pagerState.isScrollInProgress || pagerState.currentPage != pagerState.settledPage
+                        if (isModeSwitchLocked || isPagerBusy) {
                             totalDrag = 0f
-                        } else if (totalDrag < -50 && isExpanded) {
-                            onExpandedChange(false)
-                            totalDrag = 0f
+                            return@detectVerticalDragGestures
                         }
-                    }
+
+                        val now = SystemClock.uptimeMillis()
+                        if (now - lastSwitchUptimeMs < switchCooldownMs) {
+                            totalDrag = 0f
+                            return@detectVerticalDragGestures
+                        }
+
+                        if (totalDrag > gestureThreshold && !isExpanded) {
+                            onExpandedChange(true)
+                            lastSwitchUptimeMs = now
+                        } else if (totalDrag < -gestureThreshold && isExpanded) {
+                            onExpandedChange(false)
+                            lastSwitchUptimeMs = now
+                        }
+                        totalDrag = 0f
+                    },
+                    onDragCancel = { totalDrag = 0f }
                 )
             }
     ) {
-        // --- 顶部操作栏 ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -205,9 +319,22 @@ fun FlexibleCalendarGrid(
                 modifier = Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
-                ) { onExpandedChange(!isExpanded) }) {
+                ) {
+                    if (canSwitchMode) {
+                        onExpandedChange(!isExpanded)
+                        lastSwitchUptimeMs = SystemClock.uptimeMillis()
+                    }
+                }
+                .graphicsLayer {
+                    val headerEase = smoothStep(headerLiftProgress)
+                    val subtleScale = 0.985f + 0.015f * headerEase
+                    scaleX = subtleScale
+                    scaleY = subtleScale
+                    translationY = (1f - headerEase) * headerTranslationPx
+                }
+            ) {
                 Text(
-                    text = viewYearMonth.monthValue.toString(),
+                    text = headerYearMonth.monthValue.toString(),
                     fontSize = 56.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
@@ -227,16 +354,16 @@ fun FlexibleCalendarGrid(
                     .clip(RoundedCornerShape(20.dp))
                     .border(1.5.dp, Color(0xFFEEEEEE), RoundedCornerShape(20.dp))
                     .clickable {
-                        val today = LocalDate.now()
                         onDateSelected(today)
                         anchorDate = today
                         anchorPage = initialPage
                         coroutineScope.launch { pagerState.scrollToPage(initialPage) }
                     }
-                    .padding(horizontal = 14.dp, vertical = 6.dp), contentAlignment = Alignment.Center
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "TODAY",
+                    text = "TODAY",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.Black
@@ -244,11 +371,11 @@ fun FlexibleCalendarGrid(
             }
         }
 
-        // --- 星期头 ---
-        val weekDays = listOf("一", "二", "三", "四", "五", "六", "日")
-        Row(modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
             weekDays.forEach { day ->
                 Text(
                     text = day,
@@ -261,82 +388,89 @@ fun FlexibleCalendarGrid(
             }
         }
 
-        // --- 核心日历网格 ---
-        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth()) { page ->
-            val pageOffset = page - anchorPage
-            val pageBaseDate = if (isExpanded) {
-                anchorDate.plusMonths(pageOffset.toLong())
-            } else {
-                anchorDate.plusWeeks(pageOffset.toLong())
-            }
-
-            val yearMonth = YearMonth.from(pageBaseDate)
-            val firstDayOfMonth = yearMonth.atDay(1)
-            val daysInMonth = yearMonth.lengthOfMonth()
-            val startOffset = firstDayOfMonth.dayOfWeek.value - 1
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                val targetRow = run {
-                    val dayOffset = pageBaseDate.dayOfMonth + startOffset - 1
-                    (dayOffset / 7).coerceIn(0, 5)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(animationSpec = tween(220, easing = FastOutSlowInEasing))
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth(),
+                beyondViewportPageCount = 1
+            ) { page ->
+                val pageOffset = page - anchorPage
+                val pageBaseDate = if (isExpanded) {
+                    anchorDate.plusMonths(pageOffset.toLong())
+                } else {
+                    anchorDate.plusWeeks(pageOffset.toLong())
                 }
 
-                for (row in 0..5) {
-                    // ★ 核心回退：使用最稳健的 AnimatedVisibility，无论怎么切，绝不会让周历隐形！
-                    AnimatedVisibility(
-                        visible = isExpanded || row == targetRow,
-                        enter = fadeIn(tween(200)) + expandVertically(
-                            tween(
-                                350,
-                                easing = FastOutSlowInEasing
-                            )
-                        ),
-                        exit = fadeOut(tween(150)) + shrinkVertically(
-                            tween(
-                                300,
-                                easing = FastOutSlowInEasing
-                            )
+                val yearMonth = remember(pageBaseDate) { YearMonth.from(pageBaseDate) }
+                val firstDayOffset = remember(yearMonth) { yearMonth.atDay(1).dayOfWeek.value - 1 }
+                val targetRow = remember(pageBaseDate, firstDayOffset) {
+                    ((pageBaseDate.dayOfMonth + firstDayOffset - 1) / 7).coerceIn(0, 5)
+                }
+
+                val basePageCells = remember(yearMonth, pageDataVersion) {
+                    pageCellsCache.getOrPut(yearMonth) {
+                        buildCalendarPageCells(
+                            yearMonth = yearMonth,
+                            memosByDate = memosByDate,
+                            holidayBadgeMap = holidayBadgeMap
                         )
-                    ) {
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            for (col in 0 until 7) {
-                                val cellIndex = row * 7 + col
-                                val dayOffset = cellIndex - startOffset + 1
-                                val isCurrentMonth = dayOffset in 1..daysInMonth
-                                val currentDate =
-                                    if (isCurrentMonth) yearMonth.atDay(dayOffset) else if (dayOffset < 1) yearMonth.minusMonths(
-                                        1
-                                    ).atEndOfMonth()
-                                        .plusDays(dayOffset.toLong()) else yearMonth.plusMonths(1)
-                                        .atDay(dayOffset - daysInMonth)
+                    }
+                }
+                val pageCells by produceState(
+                    initialValue = basePageCells,
+                    key1 = yearMonth,
+                    key2 = basePageCells
+                ) {
+                    value = withContext(Dispatchers.Default) {
+                        fillCalendarPageLunarText(basePageCells)
+                    }
+                }
 
-                                val isSelected = currentDate == selectedDate
-                                val rawMemos = remember(
-                                    memosByDate,
-                                    currentDate
-                                ) {
-                                    memosByDate[currentDate]?.sortedBy { it.orderWeight }
-                                        ?: emptyList()
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    for (row in 0..5) {
+                        val isTargetRow = row == targetRow
+                        val isNonTargetVisible = isExpanded || nonTargetRowsProgress > 0.01f
+                        if (!isTargetRow && !isNonTargetVisible) continue
+
+                        val rowModifier = if (isTargetRow) {
+                            Modifier.fillMaxWidth()
+                        } else {
+                            val distance = abs(row - targetRow)
+                            val staggerStart = (distance * 0.12f).coerceAtMost(0.45f)
+                            val rawProgress = ((nonTargetRowsProgress - staggerStart) / (1f - staggerStart))
+                                .coerceIn(0f, 1f)
+                            val easedProgress = smoothStep(rawProgress)
+                            val direction = if (row < targetRow) -1f else 1f
+
+                            Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    alpha = easedProgress
+                                    scaleY = 0.96f + 0.04f * easedProgress
+                                    translationY = direction * rowTranslationBasePx * (1f - easedProgress)
                                 }
-                                val wrappedMemos = remember(rawMemos) { MemosWrapper(rawMemos) }
-                                val badgeType = remember(
-                                    holidayBadgeMap,
-                                    currentDate
-                                ) { holidayBadgeMap[currentDate] }
+                        }
 
+                        Row(modifier = rowModifier) {
+                            for (col in 0 until 7) {
+                                val cell = pageCells[row * 7 + col]
+                                val isSelected = cell.date == selectedDate
                                 CalendarCell(
-                                    date = currentDate,
-                                    isCurrentMonth = isCurrentMonth,
+                                    date = cell.date,
+                                    isCurrentMonth = cell.isCurrentMonth,
                                     isSelected = isSelected,
-                                    wrappedMemos = wrappedMemos,
+                                    memos = cell.memos,
+                                    lunarText = cell.lunarText,
                                     wrappedColors = wrappedColors,
-                                    badgeType = badgeType,
+                                    badgeType = cell.badgeType,
                                     modifier = Modifier.weight(1f),
-                                    onDateClick = { onDateSelected(currentDate) },
+                                    onDateClick = { onDateSelected(cell.date) },
                                     onMemoClick = {
-                                        if (isSelected) onMemoAreaSelected(currentDate) else onDateSelected(
-                                            currentDate
-                                        )
+                                        if (isSelected) onMemoAreaSelected(cell.date) else onDateSelected(cell.date)
                                     }
                                 )
                             }
@@ -350,11 +484,12 @@ fun FlexibleCalendarGrid(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun CalendarCell(
+private fun CalendarCell(
     date: LocalDate,
     isCurrentMonth: Boolean,
     isSelected: Boolean,
-    wrappedMemos: MemosWrapper,
+    memos: List<CalendarMemo>,
+    lunarText: String,
     wrappedColors: ColorsWrapper,
     badgeType: Int?,
     modifier: Modifier = Modifier,
@@ -362,14 +497,13 @@ fun CalendarCell(
     onMemoClick: () -> Unit
 ) {
     val isToday = remember(date) { date == LocalDate.now() }
-    val smartDateText = LunarDateCache.getText(date)
-
     val bgColor = if (isSelected) Color(0xFFF0F0F0) else Color.Transparent
-    val dateTextColor =
-        if (isToday && isCurrentMonth) Color(0xFFFF5252) else if (isCurrentMonth) Color.Black else Color.LightGray.copy(
-            alpha = 0.5f
-        )
-    val lunarTextColor = if (!isCurrentMonth) Color.Transparent else Color.Gray
+    val dateTextColor = when {
+        isToday && isCurrentMonth -> Color(0xFFFF5252)
+        isCurrentMonth -> Color.Black
+        else -> Color.LightGray.copy(alpha = 0.5f)
+    }
+    val lunarTextColor = if (isCurrentMonth) Color.Gray else Color.Transparent
 
     Box(
         modifier = modifier
@@ -390,9 +524,7 @@ fun CalendarCell(
                     .align(Alignment.TopEnd)
                     .clip(RoundedCornerShape(bottomStart = 6.dp, topEnd = 6.dp))
                     .background(
-                        if (isRest) Color(0xFFFF5252).copy(alpha = 0.8f) else Color(
-                            0xFF9E9E9E
-                        ).copy(alpha = 0.8f)
+                        if (isRest) Color(0xFFFF5252).copy(alpha = 0.8f) else Color(0xFF9E9E9E).copy(alpha = 0.8f)
                     )
                     .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
@@ -419,11 +551,11 @@ fun CalendarCell(
             )
 
             Text(
-                text = smartDateText,
+                text = lunarText,
                 fontSize = 8.5.sp,
                 color = lunarTextColor,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis, // ★ 保留：使用 Ellipsis 防卡顿
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 2.dp)
             )
 
@@ -439,12 +571,11 @@ fun CalendarCell(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val maxDisplay = 4
-                wrappedMemos.list.take(maxDisplay).forEachIndexed { index, memo ->
+                memos.take(maxDisplay).forEachIndexed { index, memo ->
                     val overrideColor = wrappedColors.map[memo.id] ?: memo.colorValue
-
-                    if (index == maxDisplay - 1 && wrappedMemos.list.size > maxDisplay) {
+                    if (index == maxDisplay - 1 && memos.size > maxDisplay) {
                         Box(contentAlignment = Alignment.BottomEnd) {
-                            MemoMiniBlock(memo, overrideColor = overrideColor)
+                            MemoMiniBlock(memo = memo, overrideColor = overrideColor)
                             Box(
                                 modifier = Modifier
                                     .padding(bottom = 1.dp, end = 1.dp)
@@ -454,7 +585,7 @@ fun CalendarCell(
                                     .padding(horizontal = 3.dp, vertical = 0.5.dp)
                             ) {
                                 Text(
-                                    text = "+${wrappedMemos.list.size - maxDisplay + 1}",
+                                    text = "+${memos.size - maxDisplay + 1}",
                                     fontSize = 7.sp,
                                     color = Color.White,
                                     fontWeight = FontWeight.ExtraBold,
@@ -463,7 +594,7 @@ fun CalendarCell(
                             }
                         }
                     } else {
-                        MemoMiniBlock(memo, overrideColor = overrideColor)
+                        MemoMiniBlock(memo = memo, overrideColor = overrideColor)
                     }
                 }
             }
@@ -472,7 +603,7 @@ fun CalendarCell(
 }
 
 @Composable
-fun MemoMiniBlock(memo: CalendarMemo, overrideColor: Long) {
+private fun MemoMiniBlock(memo: CalendarMemo, overrideColor: Long) {
     val softBgColor = Color(overrideColor).copy(alpha = 0.25f)
     val indicatorColor = Color(overrideColor).copy(alpha = 0.9f)
 
@@ -484,10 +615,12 @@ fun MemoMiniBlock(memo: CalendarMemo, overrideColor: Long) {
             .background(softBgColor)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier
-                .width(2.5.dp)
-                .height(10.dp)
-                .background(indicatorColor))
+            Box(
+                modifier = Modifier
+                    .width(2.5.dp)
+                    .height(10.dp)
+                    .background(indicatorColor)
+            )
             Text(
                 text = memo.title,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.5.dp),

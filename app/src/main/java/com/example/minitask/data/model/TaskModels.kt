@@ -1,11 +1,13 @@
 package com.example.minitask.data.model
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.time.LocalDate
 import java.util.UUID
 
-// 1. 任务优先级枚举
+@Immutable
 enum class TaskPriority(
     val colorValue: Long,
     val weight: Int,
@@ -18,8 +20,14 @@ enum class TaskPriority(
     LEVEL_4(0xFF69F0AE, 4, "不重要不紧急", "常规")
 }
 
-// 2. 每日任务表
-@Entity(tableName = "tasks")
+@Immutable
+@Entity(
+    tableName = "tasks",
+    indices = [
+        Index(value = ["targetDate"]),
+        Index(value = ["targetDate", "isPinned", "isCompleted", "priority", "orderWeight"])
+    ]
+)
 data class DailyTask(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val title: String,
@@ -30,8 +38,14 @@ data class DailyTask(
     val orderWeight: Long = System.nanoTime()
 )
 
-// 3. 备忘录表
-@Entity(tableName = "memos")
+@Immutable
+@Entity(
+    tableName = "memos",
+    indices = [
+        Index(value = ["targetDate"]),
+        Index(value = ["isCompleted"])
+    ]
+)
 data class CalendarMemo(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val title: String,
@@ -41,15 +55,17 @@ data class CalendarMemo(
     val orderWeight: Long = System.nanoTime()
 )
 
-// 4. 每日必做（习惯）表
-@Entity(tableName = "routines")
+@Immutable
+@Entity(
+    tableName = "routines",
+    indices = [Index(value = ["orderWeight"])]
+)
 data class DailyRoutine(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val title: String,
-    val routineType: String = "DAILY", // DAILY, INTERVAL, WEEKLY
+    val routineType: String = "DAILY",
     val repeatValue: String = "",
     val startDate: LocalDate = LocalDate.now(),
-    // ★ 新增：用于控制习惯终止的日期
     val endDate: LocalDate? = null,
     val lastCompletedDate: LocalDate? = null,
     val orderWeight: Long = System.nanoTime()

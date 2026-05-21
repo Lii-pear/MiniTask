@@ -46,11 +46,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.minitask.R
 import com.example.minitask.data.model.CalendarMemo
 import java.time.LocalDate
 
@@ -67,9 +69,7 @@ fun MemoManagerDialog(
 ) {
     var newMemoTitle by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
-
-    // 将置顶的排在前面 (orderWeight == 0 表示置顶)
-    val sortedMemos = currentMemos.sortedBy { it.orderWeight }
+    val sortedMemos = remember(currentMemos) { currentMemos.sortedBy { it.orderWeight } }
 
     Box(
         modifier = Modifier
@@ -82,7 +82,11 @@ fun MemoManagerDialog(
             containerColor = Color.White,
             title = {
                 Text(
-                    "${selectedDate.monthValue}月${selectedDate.dayOfMonth}日 备忘录",
+                    text = stringResource(
+                        R.string.memo_dialog_title,
+                        selectedDate.monthValue,
+                        selectedDate.dayOfMonth
+                    ),
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
@@ -98,13 +102,17 @@ fun MemoManagerDialog(
                                     .padding(vertical = 4.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(if (isPinned) Color(0xFFFFF9C4) else Color.Transparent)
-                                    .padding(start = 4.dp, end = 0.dp),
+                                    .padding(start = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 IconButton(onClick = { onToggleComplete(memo) }) {
                                     Icon(
-                                        imageVector = if (memo.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                        contentDescription = "Complete",
+                                        imageVector = if (memo.isCompleted) {
+                                            Icons.Default.CheckCircle
+                                        } else {
+                                            Icons.Default.RadioButtonUnchecked
+                                        },
+                                        contentDescription = stringResource(R.string.cd_complete),
                                         tint = if (memo.isCompleted) Color(0xFF4CAF50) else Color.LightGray,
                                         modifier = Modifier.size(22.dp)
                                     )
@@ -120,14 +128,13 @@ fun MemoManagerDialog(
                                     textDecoration = if (memo.isCompleted) TextDecoration.LineThrough else null
                                 )
 
-                                // 备忘录的置顶按钮
                                 IconButton(
                                     onClick = { onTogglePin(memo) },
                                     modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                                        contentDescription = "Pin",
+                                        contentDescription = stringResource(R.string.cd_pin),
                                         tint = if (isPinned) Color(0xFFFFAB40) else Color.LightGray,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -139,7 +146,7 @@ fun MemoManagerDialog(
                                 ) {
                                     Icon(
                                         Icons.Default.Delete,
-                                        contentDescription = "Delete",
+                                        contentDescription = stringResource(R.string.cd_delete),
                                         tint = Color(0xFFFF5252).copy(alpha = 0.7f),
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -147,11 +154,13 @@ fun MemoManagerDialog(
                             }
                         }
                     }
-                    if (currentMemos.isNotEmpty()) HorizontalDivider(
-                        modifier = Modifier.padding(
-                            vertical = 12.dp
-                        ), color = Color(0xFFEEEEEE)
-                    )
+
+                    if (currentMemos.isNotEmpty()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = Color(0xFFEEEEEE)
+                        )
+                    }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -162,7 +171,7 @@ fun MemoManagerDialog(
                             onValueChange = { newMemoTitle = it },
                             placeholder = {
                                 Text(
-                                    "新增备忘...",
+                                    text = stringResource(R.string.memo_placeholder_new),
                                     fontSize = 14.sp,
                                     color = Color.LightGray
                                 )
@@ -182,22 +191,29 @@ fun MemoManagerDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                if (newMemoTitle.isNotBlank()) {
-                                    onAddMemo(newMemoTitle); newMemoTitle =
-                                        ""; focusManager.clearFocus()
+                                val normalized = newMemoTitle.trim()
+                                if (normalized.isNotEmpty()) {
+                                    onAddMemo(normalized)
+                                    newMemoTitle = ""
+                                    focusManager.clearFocus()
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
                             shape = RoundedCornerShape(12.dp),
                             enabled = newMemoTitle.isNotBlank()
-                        ) { Text("添加", color = Color.White) }
+                        ) {
+                            Text(
+                                text = stringResource(R.string.button_add),
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = onDismiss) {
                     Text(
-                        "关闭",
+                        text = stringResource(R.string.button_close),
                         color = Color.Black,
                         fontWeight = FontWeight.Bold
                     )

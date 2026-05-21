@@ -19,3 +19,15 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep room annotations metadata and generated usage points in release builds.
+-keepattributes *Annotation*
+-keep class * extends androidx.room.RoomDatabase { *; }
+-keep @androidx.room.Entity class * { *; }
+-keepclassmembers class * {
+    @androidx.room.* <fields>;
+    @androidx.room.* <methods>;
+}
+
+# Keep lunar calendar library classes (used across date conversion paths).
+-keep class com.nlf.calendar.** { *; }

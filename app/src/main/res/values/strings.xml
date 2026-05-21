@@ -1,3 +1,36 @@
 <resources>
     <string name="app_name">MiniTask</string>
+    <string name="add_tab_task">待办任务</string>
+    <string name="add_tab_memo">日历备忘</string>
+    <string name="add_tab_routine">每日必做</string>
+    <string name="add_placeholder_task">准备做什么？</string>
+    <string name="add_placeholder_memo">记点什么备忘？</string>
+    <string name="add_placeholder_routine">养成什么好习惯？</string>
+    <string name="add_priority_title">优先级设置</string>
+    <string name="add_memo_hint">备忘内容将同步到今日任务列表，并显示在日历标记中</string>
+    <string name="add_routine_cycle_title">重复周期</string>
+    <string name="routine_type_daily">每天</string>
+    <string name="routine_type_interval">隔几天</string>
+    <string name="routine_type_weekly">每周</string>
+    <string name="routine_interval_prefix">每</string>
+    <string name="routine_interval_suffix">天一次</string>
+    <string name="routine_daily_hint">习惯每天都会出现在你的任务清单中</string>
+    <string name="button_confirm_add">确认添加</string>
+    <string name="button_add">添加</string>
+    <string name="button_close">关闭</string>
+    <string name="toast_add_success">添加成功</string>
+    <string name="error_title_required">请输入内容后再保存</string>
+    <string name="error_weekly_day_required">请至少选择一个星期</string>
+    <string name="weekday_mon">一</string>
+    <string name="weekday_tue">二</string>
+    <string name="weekday_wed">三</string>
+    <string name="weekday_thu">四</string>
+    <string name="weekday_fri">五</string>
+    <string name="weekday_sat">六</string>
+    <string name="weekday_sun">日</string>
+    <string name="memo_dialog_title">%1$d月%2$d日 备忘录</string>
+    <string name="memo_placeholder_new">新增备忘...</string>
+    <string name="cd_complete">完成</string>
+    <string name="cd_pin">置顶</string>
+    <string name="cd_delete">删除</string>
 </resources>

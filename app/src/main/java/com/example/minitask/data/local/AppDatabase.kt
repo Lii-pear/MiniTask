@@ -11,8 +11,8 @@ import com.example.minitask.data.model.DailyTask
 
 @Database(
     entities = [DailyTask::class, CalendarMemo::class, DailyRoutine::class],
-    version = 4, // ★ 升级版本号到 4：触发重构，加载 endDate 字段
-    exportSchema = false
+    version = 6,
+    exportSchema = true
 )
 @TypeConverters(DateConverters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +30,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "minitask_database"
                 )
+                    .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

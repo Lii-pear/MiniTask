@@ -2,7 +2,6 @@ package com.example.minitask.ui.components
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -35,7 +34,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,23 +58,15 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-// ==========================================
-// 🫧 极致丝滑的柔彩色气泡引擎
-// ==========================================
 class ParticleStatus(
     val velocityX: Float,
     val velocityY: Float,
     val initialSize: Float,
     val color: Color
-) {
-    var translationX by mutableFloatStateOf(0f)
-    var translationY by mutableFloatStateOf(0f)
-    var alpha by mutableFloatStateOf(1f)
-    var scale by mutableFloatStateOf(1f)
-}
+)
 
 @Composable
-fun rememberParticles(count: Int = 35): List<ParticleStatus> {
+fun rememberParticles(count: Int = 12): List<ParticleStatus> {
     return remember(count) {
         val random = Random()
         val softColors = listOf(
@@ -89,11 +79,11 @@ fun rememberParticles(count: Int = 35): List<ParticleStatus> {
         )
         List(count) {
             val angle = (random.nextFloat() * 2 * PI).toFloat()
-            val speed = random.nextFloat() * 30f + 15f
+            val speed = random.nextFloat() * 24f + 12f
             ParticleStatus(
                 velocityX = speed * cos(angle),
-                velocityY = speed * sin(angle) - 12f,
-                initialSize = random.nextFloat() * 7.dp.value + 4.dp.value,
+                velocityY = speed * sin(angle) - 10f,
+                initialSize = random.nextFloat() * 4f + 3f,
                 color = softColors[random.nextInt(softColors.size)]
             )
         }
@@ -101,35 +91,26 @@ fun rememberParticles(count: Int = 35): List<ParticleStatus> {
 }
 
 @Composable
-fun ExplodingParticle(status: ParticleStatus, durationMillis: Int = 450) {
-    val animState = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        animState.animateTo(
-            1f,
-            animationSpec = tween(durationMillis, easing = FastOutSlowInEasing)
-        )
-    }
-    val progress = animState.value
-    status.translationX = status.velocityX * progress * 3.5f
-    status.translationY = (status.velocityY * progress * 3.5f) + (progress * progress * 160f)
-    status.scale = if (progress < 0.1f) 1f else 1f - ((progress - 0.1f) * 1.1f)
-    status.alpha = if (progress < 0.2f) 1f else 1f - ((progress - 0.2f) * 1.25f)
+fun ExplodingParticle(status: ParticleStatus, progress: Float) {
+    val translationX = status.velocityX * progress * 2.8f
+    val translationY = (status.velocityY * progress * 2.8f) + (progress * progress * 120f)
+    val scale = (1f - progress * 0.95f).coerceAtLeast(0f)
+    val alpha = (1f - progress * 1.2f).coerceIn(0f, 1f)
 
     Box(
         modifier = Modifier
             .size(status.initialSize.dp)
             .graphicsLayer {
-                translationX = status.translationX; translationY = status.translationY; scaleX =
-                status.scale.coerceAtLeast(0f); scaleY = status.scale.coerceAtLeast(0f); alpha =
-                status.alpha.coerceIn(0f, 1f)
+                this.translationX = translationX
+                this.translationY = translationY
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
             }
             .background(status.color, CircleShape)
     )
 }
 
-// ==========================================
-// 🍃 全新 UI：现代线框风与悬浮消融质感的 每日必做
-// ==========================================
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RoutineChip(
@@ -141,55 +122,67 @@ fun RoutineChip(
 ) {
     var localIsDone by remember(routine.id, isDone) { mutableStateOf(isDone) }
     var isProcessing by remember { mutableStateOf(false) }
+    var isExploding by remember { mutableStateOf(false) }
+
     val coroutineScope = rememberCoroutineScope()
     val view = LocalView.current
+    val particles = rememberParticles()
+    val interactionSource = remember { MutableInteractionSource() }
 
     val displayIsDone = localIsDone
-    // ★ UI升级：未打卡时是带精致边框的纯白卡片，打卡后边框消融，背景下沉为极简淡灰
-    val bgColor by animateColorAsState(
-        if (displayIsDone) Color(0xFFFAFAFA) else Color.White,
-        label = ""
-    )
+    val bgColor by animateColorAsState(if (displayIsDone) Color(0xFFFAFAFA) else Color.White, label = "")
     val borderColor by animateColorAsState(
-        if (displayIsDone) Color.Transparent else Color(
-            0xFFE8E8E8
-        ), label = ""
+        if (displayIsDone) Color.Transparent else Color(0xFFE8E8E8),
+        label = ""
     )
     val contentColor by animateColorAsState(
         if (displayIsDone) Color.LightGray else Color(0xFF424242),
         label = ""
     )
+    val explosionProgress by animateFloatAsState(
+        targetValue = if (isExploding) 1f else 0f,
+        animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing),
+        label = "chipExplosion"
+    )
 
-    var isExploding by remember { mutableStateOf(false) }
-    val particles = rememberParticles(count = 35)
-    val interactionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(isExploding) {
+        if (isExploding) {
+            delay(300)
+            onLongClick()
+        }
+    }
 
     Box(
-        modifier = modifier
-            .combinedClickable(
-                interactionSource = interactionSource, indication = null,
-                onClick = {
-                    if (!isExploding && !isProcessing) {
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        localIsDone = !localIsDone
-                        isProcessing = true
-                        coroutineScope.launch { delay(150); onClick(); isProcessing = false }
-                    }
-                },
-                onLongClick = {
-                    if (!isExploding && !isProcessing) {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); isExploding =
-                            true
+        modifier = modifier.combinedClickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = {
+                if (!isProcessing && !isExploding) {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    localIsDone = !localIsDone
+                    isProcessing = true
+                    coroutineScope.launch {
+                        delay(120)
+                        onClick()
+                        isProcessing = false
                     }
                 }
-            )
+            },
+            onLongClick = {
+                if (!isProcessing && !isExploding) {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    isProcessing = true
+                    isExploding = true
+                }
+            }
+        )
     ) {
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .clip(RoundedCornerShape(14.dp)) // 更具现代感的微曲率圆角
+                .clip(RoundedCornerShape(14.dp))
                 .background(if (isExploding) Color.Transparent else bgColor)
-                .border(1.dp, borderColor, RoundedCornerShape(14.dp)) // 极细边框
+                .border(1.dp, borderColor, RoundedCornerShape(14.dp))
         )
 
         Text(
@@ -203,22 +196,16 @@ fun RoutineChip(
                 .alpha(if (isExploding) 0f else 1f)
         )
 
-        if (isExploding) {
+        if (explosionProgress > 0f) {
             Box(modifier = Modifier.align(Alignment.Center)) {
-                particles.forEach {
-                    ExplodingParticle(
-                        status = it
-                    )
+                particles.forEach { particle ->
+                    ExplodingParticle(status = particle, progress = explosionProgress)
                 }
             }
-            LaunchedEffect(Unit) { delay(400); onLongClick() }
         }
     }
 }
 
-// ==========================================
-// 🍃 全新 UI：轻盈悬浮阴影与极简排版的 每日任务
-// ==========================================
 @Composable
 fun TaskListItem(
     task: DailyTask,
@@ -234,26 +221,23 @@ fun TaskListItem(
 
     val isDone = localIsDone
     val titleAlpha by animateFloatAsState(if (isDone) 0.4f else 1f, label = "")
-
-    // ★ UI升级：置顶任务采用极度克制的“奶油黄”，普通任务为纯白
     val bgSurfaceColor by animateColorAsState(
         if (task.isPinned) Color(0xFFFFFDE7) else Color.White,
         label = ""
     )
     val borderColor by animateColorAsState(
-        if (task.isPinned) Color(0xFFFFD54F).copy(alpha = 0.3f) else Color(
-            0xFFF0F0F0
-        ), label = ""
+        if (task.isPinned) Color(0xFFFFD54F).copy(alpha = 0.3f) else Color(0xFFF0F0F0),
+        label = ""
     )
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(20.dp), // 极其平滑的 20dp 大圆角
+        shape = RoundedCornerShape(20.dp),
         color = bgSurfaceColor,
-        border = BorderStroke(1.dp, borderColor), // 增加 1dp 的高定感边框
-        shadowElevation = if (isDone) 0.dp else 2.dp // ★ 未完成时带有极轻微地悬浮阴影，增加可点击感
+        border = BorderStroke(1.dp, borderColor),
+        shadowElevation = if (isDone) 0.dp else 1.dp
     ) {
         Row(
             modifier = Modifier
@@ -261,12 +245,15 @@ fun TaskListItem(
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     localIsDone = !localIsDone
                     isProcessing = true
-                    coroutineScope.launch { delay(150); onClick(); isProcessing = false }
+                    coroutineScope.launch {
+                        delay(120)
+                        onClick()
+                        isProcessing = false
+                    }
                 }
-                .padding(horizontal = 20.dp, vertical = 18.dp), // 增加内部呼吸留白
+                .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 左侧信息区优化：让“全天”和优先级标签显得更精致
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.width(44.dp)
@@ -277,7 +264,6 @@ fun TaskListItem(
                     fontWeight = FontWeight.ExtraBold,
                     color = if (isDone) Color.LightGray else Color(0xFF333333)
                 )
-                // 柔和果冻背景的优先级小标签
                 Box(
                     modifier = Modifier
                         .padding(top = 4.dp)
@@ -297,15 +283,12 @@ fun TaskListItem(
             }
 
             Spacer(modifier = Modifier.width(14.dp))
-            // 指示条更加细长灵动
             Box(
                 modifier = Modifier
                     .size(width = 3.dp, height = 28.dp)
                     .clip(RoundedCornerShape(1.5.dp))
                     .background(
-                        if (isDone) Color(0xFFEEEEEE) else Color(task.priority.colorValue).copy(
-                            alpha = 0.8f
-                        )
+                        if (isDone) Color(0xFFEEEEEE) else Color(task.priority.colorValue).copy(alpha = 0.8f)
                     )
             )
             Spacer(modifier = Modifier.width(16.dp))
@@ -322,7 +305,10 @@ fun TaskListItem(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onPinClick() },
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        onPinClick()
+                    },
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
@@ -334,7 +320,10 @@ fun TaskListItem(
                 }
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
-                    onClick = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP); onDeleteClick() },
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        onDeleteClick()
+                    },
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
@@ -346,7 +335,6 @@ fun TaskListItem(
                 }
                 Spacer(modifier = Modifier.width(10.dp))
 
-                // ★ 媲美 iOS 的高定质感 Checkbox
                 Box(
                     modifier = Modifier
                         .size(26.dp)
@@ -361,12 +349,14 @@ fun TaskListItem(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isDone) Icon(
-                        Icons.Default.Check,
-                        null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    if (isDone) {
+                        Icon(
+                            Icons.Default.Check,
+                            null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }

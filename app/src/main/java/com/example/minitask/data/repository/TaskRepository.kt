@@ -1,43 +1,35 @@
 package com.example.minitask.data.repository
 
-import com.example.minitask.data.local.TaskDao
 import com.example.minitask.data.model.CalendarMemo
 import com.example.minitask.data.model.DailyRoutine
 import com.example.minitask.data.model.DailyTask
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
-class TaskRepository(private val taskDao: TaskDao) {
-    fun getTasks(date: LocalDate) = taskDao.getTasksByDate(date)
-    fun getMemos(date: LocalDate) = taskDao.getMemosByDate(date)
-    fun getAllActiveMemos() = taskDao.getAllActiveMemos() // ★ 新增：获取全部全局备忘录
-    fun getRoutines() = taskDao.getAllRoutines()
+interface TaskRepository {
+    fun getTasks(date: LocalDate): Flow<List<DailyTask>>
 
-    suspend fun insertTask(task: DailyTask) =
-        withContext(Dispatchers.IO) { taskDao.insertTask(task) }
+    fun getMemos(date: LocalDate): Flow<List<CalendarMemo>>
 
-    suspend fun updateTask(task: DailyTask) =
-        withContext(Dispatchers.IO) { taskDao.updateTask(task) }
+    fun getAllActiveMemos(): Flow<List<CalendarMemo>>
 
-    suspend fun deleteTask(task: DailyTask) =
-        withContext(Dispatchers.IO) { taskDao.deleteTask(task) }
+    fun getRoutines(): Flow<List<DailyRoutine>>
 
-    suspend fun insertMemo(memo: CalendarMemo) =
-        withContext(Dispatchers.IO) { taskDao.insertMemo(memo) }
+    suspend fun insertTask(task: DailyTask)
 
-    suspend fun updateMemo(memo: CalendarMemo) =
-        withContext(Dispatchers.IO) { taskDao.updateMemo(memo) }
+    suspend fun updateTask(task: DailyTask)
 
-    suspend fun deleteMemo(memo: CalendarMemo) =
-        withContext(Dispatchers.IO) { taskDao.deleteMemo(memo) }
+    suspend fun deleteTask(task: DailyTask)
 
-    suspend fun insertRoutine(routine: DailyRoutine) =
-        withContext(Dispatchers.IO) { taskDao.insertRoutine(routine) }
+    suspend fun insertMemo(memo: CalendarMemo)
 
-    suspend fun updateRoutine(routine: DailyRoutine) =
-        withContext(Dispatchers.IO) { taskDao.updateRoutine(routine) }
+    suspend fun updateMemo(memo: CalendarMemo)
 
-    suspend fun deleteRoutine(routine: DailyRoutine) =
-        withContext(Dispatchers.IO) { taskDao.deleteRoutine(routine) }
+    suspend fun deleteMemo(memo: CalendarMemo)
+
+    suspend fun insertRoutine(routine: DailyRoutine)
+
+    suspend fun updateRoutine(routine: DailyRoutine)
+
+    suspend fun deleteRoutine(routine: DailyRoutine)
 }

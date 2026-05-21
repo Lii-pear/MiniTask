@@ -58,45 +58,56 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.minitask.R
 import com.example.minitask.data.model.TaskPriority
-import java.time.LocalDate
-
-val memoColorValues = listOf(
-    0xFF81D4FA, 0xFFA5D6A7, 0xFFFFCC80, 0xFFF48FB1,
-    0xFFFFF59D, 0xFFB0BEC5, 0xFFB39DDB, 0xFFFFAB91,
-    0xFF80CBC4, 0xFF9FA8DA, 0xFFE6EE9C, 0xFFBCAAA4
-)
-
-fun getNextMemoColorValue(currentCount: Int): Long {
-    return memoColorValues[currentCount % memoColorValues.size]
-}
+import com.example.minitask.domain.memo.MemoColorAllocator
+import com.example.minitask.domain.routine.RoutineScheduleInput
+import com.example.minitask.domain.routine.RoutineType
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AddTaskContent(
     memosCountToday: Int,
     onSaveTask: (String, TaskPriority) -> Unit,
-    onSaveRoutine: (String, String, String, LocalDate) -> Unit,
+    onSaveRoutine: (String, RoutineScheduleInput) -> Unit,
     onSaveMemo: (String, Long) -> Unit
 ) {
     var title by remember { mutableStateOf("") }
     var selectedPriority by remember { mutableStateOf(TaskPriority.LEVEL_1) }
-    var tabIndex by remember { mutableStateOf(0) }
+    var tabIndex by remember { mutableIntStateOf(0) }
 
-    // --- 每日必做专属状态 ---
-    var routineType by remember { mutableStateOf("DAILY") } // DAILY, INTERVAL, WEEKLY
+    var routineType by remember { mutableStateOf(RoutineType.DAILY) }
     var intervalDays by remember { mutableIntStateOf(2) }
-    val selectedWeekDays = remember { mutableStateListOf<Int>() } // 1..7 代表周一..周日
+    val selectedWeekDays = remember { mutableStateListOf<Int>() }
 
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     val view = LocalView.current
+
+    val tabLabels = listOf(
+        stringResource(R.string.add_tab_task),
+        stringResource(R.string.add_tab_memo),
+        stringResource(R.string.add_tab_routine)
+    )
+    val errorTitleRequiredText = stringResource(R.string.error_title_required)
+    val errorWeeklyDayRequiredText = stringResource(R.string.error_weekly_day_required)
+    val addSuccessText = stringResource(R.string.toast_add_success)
+    val weekDayLabels = listOf(
+        stringResource(R.string.weekday_mon),
+        stringResource(R.string.weekday_tue),
+        stringResource(R.string.weekday_wed),
+        stringResource(R.string.weekday_thu),
+        stringResource(R.string.weekday_fri),
+        stringResource(R.string.weekday_sat),
+        stringResource(R.string.weekday_sun)
+    )
 
     Column(
         modifier = Modifier
@@ -105,7 +116,6 @@ fun AddTaskContent(
             .imePadding()
             .padding(start = 24.dp, end = 24.dp, bottom = 24.dp, top = 16.dp)
     ) {
-        // --- 1. 胶囊状 Tab 切换 ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -119,7 +129,7 @@ fun AddTaskContent(
                     .padding(4.dp)
             ) {
                 Row {
-                    listOf("待办任务", "月历备忘", "每日必做").forEachIndexed { index, text ->
+                    tabLabels.forEachIndexed { index, text ->
                         val isSelected = tabIndex == index
                         Box(
                             modifier = Modifier
@@ -149,16 +159,15 @@ fun AddTaskContent(
             }
         }
 
-        // --- 2. 输入框 ---
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
             placeholder = {
                 Text(
                     text = when (tabIndex) {
-                        0 -> "准备做什么？"
-                        1 -> "记点什么备忘？"
-                        else -> "养成什么好习惯？"
+                        0 -> stringResource(R.string.add_placeholder_task)
+                        1 -> stringResource(R.string.add_placeholder_memo)
+                        else -> stringResource(R.string.add_placeholder_routine)
                     },
                     color = Color.LightGray
                 )
@@ -179,11 +188,11 @@ fun AddTaskContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- 3. 核心内容区 ---
-        // ★ 优化 1：高度从 140dp 放宽到 160dp，让内容有更多呼吸空间
-        Box(modifier = Modifier
-            .fillMaxWidth()
-            .height(160.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+        ) {
             AnimatedContent(
                 targetState = tabIndex,
                 transitionSpec = {
@@ -204,10 +213,10 @@ fun AddTaskContent(
                 label = "tab_content_animation"
             ) { currentTab ->
                 when (currentTab) {
-                    0 -> { // 待办任务：优先级选择
+                    0 -> {
                         Column(modifier = Modifier.fillMaxSize()) {
                             Text(
-                                "优先级设置",
+                                text = stringResource(R.string.add_priority_title),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Gray
@@ -217,9 +226,8 @@ fun AddTaskContent(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                TaskPriority.values().forEach { priority ->
+                                TaskPriority.entries.forEach { priority ->
                                     val isSelected = selectedPriority == priority
-
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier.clickable(
@@ -265,31 +273,32 @@ fun AddTaskContent(
                         }
                     }
 
-                    1 -> Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "📌 备忘内容将同步到今日任务列表中\n并显示在日历打点",
-                            color = Color.Gray,
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp
-                        )
+                    1 -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.add_memo_hint),
+                                color = Color.Gray,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 20.sp
+                            )
+                        }
                     }
 
-                    2 -> { // 每日必做：频率选择
+                    else -> {
                         Column(modifier = Modifier.fillMaxSize()) {
                             Text(
-                                "重复周期",
+                                text = stringResource(R.string.add_routine_cycle_title),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Gray
                             )
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // ★ 优化 2：二级切换器改成【填满全宽、均匀分布】的现代卡片
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -298,24 +307,22 @@ fun AddTaskContent(
                                     .padding(4.dp)
                             ) {
                                 Row(modifier = Modifier.fillMaxWidth()) {
-                                    mapOf(
-                                        "DAILY" to "每天",
-                                        "INTERVAL" to "隔几天",
-                                        "WEEKLY" to "每周"
+                                    listOf(
+                                        RoutineType.DAILY to stringResource(R.string.routine_type_daily),
+                                        RoutineType.INTERVAL to stringResource(R.string.routine_type_interval),
+                                        RoutineType.WEEKLY to stringResource(R.string.routine_type_weekly)
                                     ).forEach { (type, label) ->
                                         val isTypeSelected = routineType == type
                                         Box(
                                             modifier = Modifier
-                                                .weight(1f) // 平分宽度，告别拥挤
+                                                .weight(1f)
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(if (isTypeSelected) Color.Black else Color.Transparent)
                                                 .clickable(
                                                     interactionSource = remember { MutableInteractionSource() },
                                                     indication = null
                                                 ) {
-                                                    view.performHapticFeedback(
-                                                        HapticFeedbackConstants.KEYBOARD_TAP
-                                                    )
+                                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                                                     routineType = type
                                                 }
                                                 .padding(vertical = 8.dp),
@@ -334,22 +341,21 @@ fun AddTaskContent(
 
                             Spacer(modifier = Modifier.height(20.dp))
 
-                            // 根据类型显示具体设置
                             when (routineType) {
-                                "INTERVAL" -> {
+                                RoutineType.INTERVAL -> {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            "每 ",
+                                            text = stringResource(R.string.routine_interval_prefix),
                                             fontSize = 15.sp,
                                             color = Color.DarkGray,
                                             fontWeight = FontWeight.Medium
                                         )
                                         IconButton(
-                                            onClick = { if (intervalDays > 2) intervalDays-- },
+                                            onClick = { if (intervalDays > 1) intervalDays-- },
                                             modifier = Modifier.padding(horizontal = 4.dp)
                                         ) {
                                             Icon(
@@ -375,7 +381,7 @@ fun AddTaskContent(
                                             )
                                         }
                                         Text(
-                                            " 天一次",
+                                            text = stringResource(R.string.routine_interval_suffix),
                                             fontSize = 15.sp,
                                             color = Color.DarkGray,
                                             fontWeight = FontWeight.Medium
@@ -383,47 +389,36 @@ fun AddTaskContent(
                                     }
                                 }
 
-                                "WEEKLY" -> {
-                                    // ★ 优化 3：星期选择器填满全宽，间距均匀拉开，圆圈稍稍放大
+                                RoutineType.WEEKLY -> {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        listOf(
-                                            "一",
-                                            "二",
-                                            "三",
-                                            "四",
-                                            "五",
-                                            "六",
-                                            "日"
-                                        ).forEachIndexed { i, day ->
-                                            val dayNum = i + 1
-                                            val isDaySelected = selectedWeekDays.contains(dayNum)
+                                        weekDayLabels.forEachIndexed { index, day ->
+                                            val dayNum = index + 1
+                                            val isSelected = selectedWeekDays.contains(dayNum)
                                             Box(
                                                 modifier = Modifier
-                                                    .size(36.dp) // 尺寸从32放大到36，触控更精准
+                                                    .size(36.dp)
                                                     .clip(CircleShape)
-                                                    .background(
-                                                        if (isDaySelected) Color.Black else Color(
-                                                            0xFFF5F5F5
-                                                        )
-                                                    )
+                                                    .background(if (isSelected) Color.Black else Color(0xFFF5F5F5))
                                                     .clickable(
                                                         interactionSource = remember { MutableInteractionSource() },
                                                         indication = null
                                                     ) {
-                                                        if (isDaySelected) selectedWeekDays.remove(
-                                                            dayNum
-                                                        ) else selectedWeekDays.add(dayNum)
+                                                        if (isSelected) {
+                                                            selectedWeekDays.remove(dayNum)
+                                                        } else {
+                                                            selectedWeekDays.add(dayNum)
+                                                        }
                                                     },
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
                                                     text = day,
-                                                    color = if (isDaySelected) Color.White else Color.Gray,
+                                                    color = if (isSelected) Color.White else Color.Gray,
                                                     fontSize = 13.sp,
-                                                    fontWeight = if (isDaySelected) FontWeight.Bold else FontWeight.Medium
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                                 )
                                             }
                                         }
@@ -436,7 +431,7 @@ fun AddTaskContent(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
-                                            "习惯每天都会出现在你的任务清单中",
+                                            text = stringResource(R.string.routine_daily_hint),
                                             fontSize = 13.sp,
                                             color = Color.Gray
                                         )
@@ -453,24 +448,43 @@ fun AddTaskContent(
 
         Button(
             onClick = {
-                if (title.isNotBlank()) {
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    when (tabIndex) {
-                        0 -> onSaveTask(title, selectedPriority)
-                        1 -> onSaveMemo(title, getNextMemoColorValue(memosCountToday))
-                        2 -> {
-                            val repeatValue = when (routineType) {
-                                "INTERVAL" -> intervalDays.toString()
-                                "WEEKLY" -> selectedWeekDays.sorted().joinToString(",")
-                                else -> ""
-                            }
-                            onSaveRoutine(title, routineType, repeatValue, LocalDate.now())
-                        }
-                    }
-                    Toast.makeText(context, "添加成功！", Toast.LENGTH_SHORT).show()
-                    title = ""
-                    selectedPriority = TaskPriority.LEVEL_1
+                val normalizedTitle = title.trim()
+                if (normalizedTitle.isEmpty()) {
+                    Toast.makeText(context, errorTitleRequiredText, Toast.LENGTH_SHORT)
+                        .show()
+                    return@Button
                 }
+
+                if (tabIndex == 2 && routineType == RoutineType.WEEKLY && selectedWeekDays.isEmpty()) {
+                    Toast.makeText(
+                        context,
+                        errorWeeklyDayRequiredText,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@Button
+                }
+
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                when (tabIndex) {
+                    0 -> onSaveTask(normalizedTitle, selectedPriority)
+                    1 -> onSaveMemo(normalizedTitle, MemoColorAllocator.nextColorValue(memosCountToday))
+                    else -> {
+                        val scheduleInput = when (routineType) {
+                            RoutineType.INTERVAL -> RoutineScheduleInput.interval(intervalDays)
+                            RoutineType.WEEKLY -> RoutineScheduleInput.weekly(selectedWeekDays)
+                            RoutineType.DAILY -> RoutineScheduleInput.daily()
+                        }
+                        onSaveRoutine(normalizedTitle, scheduleInput)
+                    }
+                }
+
+                Toast.makeText(context, addSuccessText, Toast.LENGTH_SHORT)
+                    .show()
+                title = ""
+                selectedPriority = TaskPriority.LEVEL_1
+                routineType = RoutineType.DAILY
+                intervalDays = 2
+                selectedWeekDays.clear()
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -479,7 +493,12 @@ fun AddTaskContent(
             shape = RoundedCornerShape(16.dp),
             enabled = title.isNotBlank()
         ) {
-            Text("确定添加", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = stringResource(R.string.button_confirm_add),
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
