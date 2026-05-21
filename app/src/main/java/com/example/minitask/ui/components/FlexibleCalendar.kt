@@ -94,6 +94,8 @@ private val staticBadgeTextStyle = TextStyle(
 )
 
 private val weekDays = listOf("一", "二", "三", "四", "五", "六", "日")
+private const val EXPAND_RICH_CONTENT_DELAY_MS = 320L
+private const val COLLAPSE_RICH_CONTENT_DELAY_MS = 220L
 
 private class CalendarPageCellsCache(private val maxSize: Int = 18) {
     private val map = object : LinkedHashMap<YearMonth, List<CalendarDayUiModel>>(maxSize, 0.75f, true) {
@@ -207,10 +209,23 @@ fun FlexibleCalendarGrid(
     var lastSwitchUptimeMs by remember { mutableLongStateOf(0L) }
     var pageDataVersion by remember { mutableIntStateOf(0) }
     var isModeSwitchLocked by remember { mutableStateOf(false) }
+    var richContentMode by remember { mutableStateOf(isExpanded) }
+    var shouldRenderRichContent by remember { mutableStateOf(true) }
 
     LaunchedEffect(memosByDate, holidayBadgeMap) {
         pageDataVersion++
         pageCellsCache.clear()
+    }
+
+    LaunchedEffect(isExpanded) {
+        if (isExpanded != richContentMode) {
+            shouldRenderRichContent = false
+            delay(if (isExpanded) EXPAND_RICH_CONTENT_DELAY_MS else COLLAPSE_RICH_CONTENT_DELAY_MS)
+            richContentMode = isExpanded
+            shouldRenderRichContent = true
+        } else {
+            shouldRenderRichContent = true
+        }
     }
 
     LaunchedEffect(isExpanded) {
@@ -265,10 +280,12 @@ fun FlexibleCalendarGrid(
         !pagerState.isScrollInProgress &&
         pagerState.currentPage == pagerState.settledPage
 
-    LaunchedEffect(viewYearMonth) {
-        launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth.minusMonths(1)) }
-        launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth) }
-        launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth.plusMonths(1)) }
+    LaunchedEffect(viewYearMonth, shouldRenderRichContent) {
+        if (shouldRenderRichContent) {
+            launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth.minusMonths(1)) }
+            launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth) }
+            launch(Dispatchers.Default) { LunarDateCache.prewarmMonth(viewYearMonth.plusMonths(1)) }
+        }
     }
 
     Column(
@@ -396,7 +413,7 @@ fun FlexibleCalendarGrid(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxWidth(),
-                beyondViewportPageCount = 1
+                beyondViewportPageCount = 0
             ) { page ->
                 val pageOffset = page - anchorPage
                 val pageBaseDate = if (isExpanded) {
@@ -420,14 +437,19 @@ fun FlexibleCalendarGrid(
                         )
                     }
                 }
-                val pageCells by produceState(
-                    initialValue = basePageCells,
-                    key1 = yearMonth,
-                    key2 = basePageCells
-                ) {
-                    value = withContext(Dispatchers.Default) {
-                        fillCalendarPageLunarText(basePageCells)
+                val pageCells = if (shouldRenderRichContent) {
+                    val filledPageCells by produceState(
+                        initialValue = basePageCells,
+                        key1 = yearMonth,
+                        key2 = basePageCells
+                    ) {
+                        value = withContext(Dispatchers.Default) {
+                            fillCalendarPageLunarText(basePageCells)
+                        }
                     }
+                    filledPageCells
+                } else {
+                    basePageCells
                 }
 
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -467,6 +489,7 @@ fun FlexibleCalendarGrid(
                                     lunarText = cell.lunarText,
                                     wrappedColors = wrappedColors,
                                     badgeType = cell.badgeType,
+                                    shouldRenderRichContent = shouldRenderRichContent,
                                     modifier = Modifier.weight(1f),
                                     onDateClick = { onDateSelected(cell.date) },
                                     onMemoClick = {
@@ -492,6 +515,7 @@ private fun CalendarCell(
     lunarText: String,
     wrappedColors: ColorsWrapper,
     badgeType: Int?,
+    shouldRenderRichContent: Boolean,
     modifier: Modifier = Modifier,
     onDateClick: () -> Unit,
     onMemoClick: () -> Unit
@@ -503,7 +527,9 @@ private fun CalendarCell(
         isCurrentMonth -> Color.Black
         else -> Color.LightGray.copy(alpha = 0.5f)
     }
-    val lunarTextColor = if (isCurrentMonth) Color.Gray else Color.Transparent
+    val lunarTextColor = if (shouldRenderRichContent && isCurrentMonth) Color.Gray else Color.Transparent
+    val visibleMemos = if (shouldRenderRichContent) memos else emptyList()
+    val visibleBadgeType = if (shouldRenderRichContent) badgeType else null
 
     Box(
         modifier = modifier
@@ -517,8 +543,8 @@ private fun CalendarCell(
             ) { onDateClick() }
             .padding(1.dp)
     ) {
-        if (isCurrentMonth && badgeType != null) {
-            val isRest = badgeType == 1
+        if (isCurrentMonth && visibleBadgeType != null) {
+            val isRest = visibleBadgeType == 1
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -551,7 +577,7 @@ private fun CalendarCell(
             )
 
             Text(
-                text = lunarText,
+                text = if (shouldRenderRichContent) lunarText else "",
                 fontSize = 8.5.sp,
                 color = lunarTextColor,
                 maxLines = 1,
@@ -571,9 +597,9 @@ private fun CalendarCell(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val maxDisplay = 4
-                memos.take(maxDisplay).forEachIndexed { index, memo ->
+                visibleMemos.take(maxDisplay).forEachIndexed { index, memo ->
                     val overrideColor = wrappedColors.map[memo.id] ?: memo.colorValue
-                    if (index == maxDisplay - 1 && memos.size > maxDisplay) {
+                    if (index == maxDisplay - 1 && visibleMemos.size > maxDisplay) {
                         Box(contentAlignment = Alignment.BottomEnd) {
                             MemoMiniBlock(memo = memo, overrideColor = overrideColor)
                             Box(
@@ -585,7 +611,7 @@ private fun CalendarCell(
                                     .padding(horizontal = 3.dp, vertical = 0.5.dp)
                             ) {
                                 Text(
-                                    text = "+${memos.size - maxDisplay + 1}",
+                                    text = "+${visibleMemos.size - maxDisplay + 1}",
                                     fontSize = 7.sp,
                                     color = Color.White,
                                     fontWeight = FontWeight.ExtraBold,
