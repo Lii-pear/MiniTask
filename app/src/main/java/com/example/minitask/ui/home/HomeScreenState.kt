@@ -13,16 +13,12 @@ import androidx.compose.runtime.setValue
 class HomeScreenState internal constructor(
     showMemoDialogState: MutableState<Boolean>,
     showAddTaskSheetState: MutableState<Boolean>,
-    isCalendarExpandedState: MutableState<Boolean>,
     showStatsDialogState: MutableState<Boolean>
 ) {
     var showMemoDialog by showMemoDialogState
         private set
 
     var showAddTaskSheet by showAddTaskSheetState
-        private set
-
-    var isCalendarExpanded by isCalendarExpandedState
         private set
 
     var showStatsDialog by showStatsDialogState
@@ -44,10 +40,6 @@ class HomeScreenState internal constructor(
         showAddTaskSheet = false
     }
 
-    fun updateCalendarExpanded(expanded: Boolean) {
-        isCalendarExpanded = expanded
-    }
-
     fun openStatsDialog() {
         showStatsDialog = true
     }
@@ -61,19 +53,16 @@ class HomeScreenState internal constructor(
 fun rememberHomeScreenState(): HomeScreenState {
     val showMemoDialog = rememberSaveable { mutableStateOf(false) }
     val showAddTaskSheet = rememberSaveable { mutableStateOf(false) }
-    val isCalendarExpanded = rememberSaveable { mutableStateOf(false) }
     val showStatsDialog = rememberSaveable { mutableStateOf(false) }
 
     return remember(
         showMemoDialog,
         showAddTaskSheet,
-        isCalendarExpanded,
         showStatsDialog
     ) {
         HomeScreenState(
             showMemoDialogState = showMemoDialog,
             showAddTaskSheetState = showAddTaskSheet,
-            isCalendarExpandedState = isCalendarExpanded,
             showStatsDialogState = showStatsDialog
         )
     }

@@ -20,7 +20,7 @@ data class RoutineScheduleInput(
     val intervalDays: Int = 1,
     val weekDays: Set<Int> = emptySet()
 ) {
-    val storageType: String = type.storageValue
+    val storageType: RoutineType = type
 
     val storageRepeatValue: String = when (type) {
         RoutineType.DAILY -> ""

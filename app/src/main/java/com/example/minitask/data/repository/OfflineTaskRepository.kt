@@ -15,9 +15,15 @@ class OfflineTaskRepository(
 
     override fun getTasks(date: LocalDate) = taskDao.getTasksByDate(date)
 
+    override fun getTasksBetween(startDate: LocalDate, endDate: LocalDate) =
+        taskDao.getTasksBetween(startDate, endDate)
+
     override fun getMemos(date: LocalDate) = taskDao.getMemosByDate(date)
 
     override fun getAllActiveMemos() = taskDao.getAllActiveMemos()
+
+    override fun getActiveMemosBetween(startDate: LocalDate, endDate: LocalDate) =
+        taskDao.getActiveMemosBetween(startDate, endDate)
 
     override fun getRoutines() = taskDao.getAllRoutines()
 

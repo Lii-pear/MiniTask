@@ -14,7 +14,7 @@ class RoutineRulesTest {
     fun dailyRoutineRespectsStartAndEndDates() {
         val routine = DailyRoutine(
             title = "Read",
-            routineType = RoutineType.DAILY.storageValue,
+            routineType = RoutineType.DAILY,
             startDate = monday,
             endDate = monday.plusDays(2)
         )
@@ -29,7 +29,7 @@ class RoutineRulesTest {
     fun intervalRoutineUsesPositiveRepeatValue() {
         val routine = DailyRoutine(
             title = "Workout",
-            routineType = RoutineType.INTERVAL.storageValue,
+            routineType = RoutineType.INTERVAL,
             repeatValue = "2",
             startDate = monday
         )
@@ -43,7 +43,7 @@ class RoutineRulesTest {
     fun weeklyRoutineUsesSelectedWeekdaysOnly() {
         val routine = DailyRoutine(
             title = "Piano",
-            routineType = RoutineType.WEEKLY.storageValue,
+            routineType = RoutineType.WEEKLY,
             repeatValue = "1,3,5",
             startDate = monday
         )
@@ -69,7 +69,7 @@ class RoutineRulesTest {
     fun scheduleInputSerializesToStorageShape() {
         val weeklyInput = RoutineScheduleInput.weekly(listOf(3, 1, 9, 3))
 
-        assertEquals(RoutineType.WEEKLY.storageValue, weeklyInput.storageType)
+        assertEquals(RoutineType.WEEKLY, weeklyInput.storageType)
         assertEquals("1,3", weeklyInput.storageRepeatValue)
         assertEquals("3", RoutineScheduleInput.interval(3).storageRepeatValue)
         assertEquals("", RoutineScheduleInput.daily().storageRepeatValue)

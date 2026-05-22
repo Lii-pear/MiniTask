@@ -1,14 +1,9 @@
 package com.example.minitask.ui.home
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,9 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,14 +36,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -60,9 +50,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.minitask.core.di.appContainer
+import com.example.minitask.data.model.CalendarMemo
+import com.example.minitask.data.model.DailyRoutine
+import com.example.minitask.data.model.DailyTask
+import com.example.minitask.data.model.TaskPriority
 import com.example.minitask.domain.routine.RoutineScheduleInput
 import com.example.minitask.ui.components.AddTaskContent
-import com.example.minitask.ui.components.FlexibleCalendarGrid
+import com.example.minitask.ui.components.LightweightCalendar
 import com.example.minitask.ui.components.MemoManagerDialog
 import com.example.minitask.ui.components.RoutineChip
 import com.example.minitask.ui.components.TaskListItem
@@ -97,18 +91,20 @@ fun HomeRoute(
         weeklyStats = weeklyStats,
         screenState = screenState,
         onDateSelected = viewModel::changeDate,
+        onPreviousCalendar = viewModel::goToPreviousPeriod,
+        onNextCalendar = viewModel::goToNextPeriod,
+        onToday = viewModel::goToToday,
+        onToggleCalendarMode = viewModel::toggleCalendarMode,
         onAddTask = viewModel::addTask,
-        onAddRoutine = { title, scheduleInput, startDate ->
-            viewModel.addRoutine(title, scheduleInput, startDate)
-        },
+        onAddRoutine = viewModel::addRoutine,
         onAddMemo = viewModel::addMemo,
         onToggleTaskComplete = viewModel::toggleTaskComplete,
         onToggleTaskPinned = viewModel::toggleTaskPinned,
         onDeleteTask = viewModel::deleteTask,
+        onToggleRoutineDone = viewModel::toggleRoutineDone,
+        onDeleteRoutine = viewModel::deleteRoutine,
         onUpdateMemo = viewModel::updateMemo,
-        onDeleteMemo = viewModel::deleteMemo,
-        onUpdateRoutine = viewModel::updateRoutine,
-        onDeleteRoutine = viewModel::deleteRoutine
+        onDeleteMemo = viewModel::deleteMemo
     )
 }
 
@@ -119,31 +115,23 @@ private fun HomeScreen(
     weeklyStats: List<Float>,
     screenState: HomeScreenState,
     onDateSelected: (LocalDate) -> Unit,
-    onAddTask: (String, com.example.minitask.data.model.TaskPriority) -> Unit,
+    onPreviousCalendar: () -> Unit,
+    onNextCalendar: () -> Unit,
+    onToday: () -> Unit,
+    onToggleCalendarMode: () -> Unit,
+    onAddTask: (String, TaskPriority) -> Unit,
     onAddRoutine: (String, RoutineScheduleInput, LocalDate) -> Unit,
-    onAddMemo: (String, Long) -> Unit,
-    onToggleTaskComplete: (com.example.minitask.data.model.DailyTask) -> Unit,
-    onToggleTaskPinned: (com.example.minitask.data.model.DailyTask) -> Unit,
-    onDeleteTask: (com.example.minitask.data.model.DailyTask) -> Unit,
-    onUpdateMemo: (com.example.minitask.data.model.CalendarMemo) -> Unit,
-    onDeleteMemo: (com.example.minitask.data.model.CalendarMemo) -> Unit,
-    onUpdateRoutine: (com.example.minitask.data.model.DailyRoutine) -> Unit,
-    onDeleteRoutine: (com.example.minitask.data.model.DailyRoutine) -> Unit
+    onAddMemo: (String) -> Unit,
+    onToggleTaskComplete: (DailyTask) -> Unit,
+    onToggleTaskPinned: (DailyTask) -> Unit,
+    onDeleteTask: (DailyTask) -> Unit,
+    onToggleRoutineDone: (DailyRoutine) -> Unit,
+    onDeleteRoutine: (DailyRoutine) -> Unit,
+    onUpdateMemo: (CalendarMemo) -> Unit,
+    onDeleteMemo: (CalendarMemo) -> Unit
 ) {
     val selectedDate = uiState.selectedDate
-    val dateTitle = remember(selectedDate) {
-        val weekday = when (selectedDate.dayOfWeek.value) {
-            1 -> "周一"
-            2 -> "周二"
-            3 -> "周三"
-            4 -> "周四"
-            5 -> "周五"
-            6 -> "周六"
-            else -> "周日"
-        }
-        "${selectedDate.year}年${selectedDate.monthValue}月${selectedDate.dayOfMonth}日 $weekday"
-    }
-
+    val activeMemos = remember(uiState.memos) { uiState.memos.filter { !it.isCompleted } }
     val sortedRoutines = remember(uiState.routines, selectedDate) {
         uiState.routines.sortedWith(
             compareBy(
@@ -152,7 +140,7 @@ private fun HomeScreen(
             )
         )
     }
-
+    val dateTitle = remember(selectedDate) { selectedDate.toDisplayTitle() }
     val view = LocalView.current
 
     Scaffold(
@@ -174,133 +162,98 @@ private fun HomeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues),
+            contentPadding = PaddingValues(bottom = 96.dp)
         ) {
-            item {
-                FlexibleCalendarGrid(
+            item(key = "calendar") {
+                LightweightCalendar(
                     selectedDate = selectedDate,
-                    memosByDate = uiState.memosByDate,
-                    dynamicMemoColors = uiState.dynamicMemoColors,
-                    holidayBadgeMap = emptyMap(),
-                    isExpanded = screenState.isCalendarExpanded,
-                    onExpandedChange = screenState::updateCalendarExpanded,
+                    visibleMonth = uiState.visibleMonth,
+                    mode = uiState.calendarMode,
+                    cells = uiState.calendarCells,
+                    onPrevious = onPreviousCalendar,
+                    onNext = onNextCalendar,
+                    onToday = onToday,
+                    onToggleMode = onToggleCalendarMode,
                     onDateSelected = onDateSelected,
-                    onMemoAreaSelected = { screenState.openMemoDialog() }
+                    onMemoAreaSelected = { date ->
+                        onDateSelected(date)
+                        screenState.openMemoDialog()
+                    }
                 )
             }
 
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
+            item(key = "date_header") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.Bottom,
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = dateTitle,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.Black
-                    )
+                    Column {
+                        Text(
+                            text = dateTitle,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.Black
+                        )
+                        Text(
+                            text = daySummary(uiState.tasks, activeMemos, sortedRoutines, selectedDate),
+                            fontSize = 12.sp,
+                            color = Color(0xFF777777),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+
                     IconButton(
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             screenState.openStatsDialog()
                         },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(Icons.Default.BarChart, "统计", tint = Color(0xFFBDBDBD))
+                        Icon(
+                            Icons.Default.BarChart,
+                            contentDescription = "统计",
+                            tint = Color(0xFF777777)
+                        )
                     }
                 }
             }
 
-            item(key = "memos_section") {
-                AnimatedVisibility(
-                    visible = uiState.memos.isNotEmpty(),
-                    enter = fadeIn(tween(180)),
-                    exit = fadeOut(tween(120))
-                ) {
-                    Column {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(horizontal = 24.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp, bottom = 8.dp)
-                        ) {
-                            items(uiState.memos, key = { it.id }) { memo ->
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Color(0xFFE3F2FD),
-                                    modifier = Modifier
-                                        .animateItem()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                            screenState.openMemoDialog()
-                                        }
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(4.dp)
-                                                .height(14.dp)
-                                                .clip(RoundedCornerShape(2.dp))
-                                                .background(Color(0xFF29B6F6))
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = memo.title,
-                                            color = Color(0xFF1565C0),
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
+            if (activeMemos.isNotEmpty()) {
+                item(key = "memos") {
+                    MemoStrip(
+                        memos = activeMemos,
+                        memoColorsById = uiState.memoColorsById,
+                        onOpen = screenState::openMemoDialog
+                    )
                 }
             }
 
-            item {
-                SectionTitle(text = "每日必做", top = 8.dp, bottom = 4.dp)
+            item(key = "routines_title") {
+                SectionTitle(text = "每日必做")
             }
 
             if (sortedRoutines.isEmpty()) {
-                item {
-                    Text(
-                        "今日暂无打卡习惯",
-                        color = Color(0xFFE0E0E0),
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                    )
+                item(key = "empty_routines") {
+                    EmptyHint(text = "今天没有需要打卡的习惯")
                 }
             } else {
-                item {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                item(key = "routines") {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        itemsIndexed(sortedRoutines, key = { _, item -> item.id }) { _, routine ->
+                        sortedRoutines.forEach { routine ->
                             RoutineChip(
                                 routine = routine,
                                 isDone = routine.lastCompletedDate == selectedDate,
-                                modifier = Modifier.animateItem(),
-                                onClick = {
-                                    val isDone = routine.lastCompletedDate == selectedDate
-                                    onUpdateRoutine(
-                                        routine.copy(lastCompletedDate = if (isDone) null else selectedDate)
-                                    )
-                                },
+                                onClick = { onToggleRoutineDone(routine) },
                                 onLongClick = { onDeleteRoutine(routine) }
                             )
                         }
@@ -308,35 +261,23 @@ private fun HomeScreen(
                 }
             }
 
-            item {
-                SectionTitle(text = "每日任务", top = 16.dp, bottom = 12.dp)
+            item(key = "tasks_title") {
+                SectionTitle(text = "今日任务")
             }
 
             if (uiState.tasks.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("今日暂无任务", color = Color.LightGray, fontSize = 15.sp)
-                    }
+                item(key = "empty_tasks") {
+                    EmptyHint(text = "今天暂时没有任务")
                 }
             } else {
                 items(items = uiState.tasks, key = { it.id }) { task ->
                     TaskListItem(
                         task = task,
-                        modifier = Modifier.animateItem(),
                         onClick = { onToggleTaskComplete(task) },
                         onPinClick = { onToggleTaskPinned(task) },
                         onDeleteClick = { onDeleteTask(task) }
                     )
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(100.dp))
             }
         }
 
@@ -347,7 +288,6 @@ private fun HomeScreen(
                 sheetState = sheetState
             ) {
                 AddTaskContent(
-                    memosCountToday = uiState.memos.size,
                     onSaveTask = onAddTask,
                     onSaveRoutine = { title, scheduleInput ->
                         onAddRoutine(title, scheduleInput, selectedDate)
@@ -362,11 +302,13 @@ private fun HomeScreen(
                 selectedDate = selectedDate,
                 currentMemos = uiState.memos,
                 onDismiss = screenState::dismissMemoDialog,
-                onAddMemo = { title -> onAddMemo(title, 0xFF40C4FF) },
+                onAddMemo = onAddMemo,
                 onTogglePin = { memo ->
                     onUpdateMemo(memo.copy(orderWeight = if (memo.orderWeight == 0L) System.nanoTime() else 0L))
                 },
-                onToggleComplete = { memo -> onUpdateMemo(memo.copy(isCompleted = !memo.isCompleted)) },
+                onToggleComplete = { memo ->
+                    onUpdateMemo(memo.copy(isCompleted = !memo.isCompleted))
+                },
                 onDelete = onDeleteMemo
             )
         }
@@ -381,18 +323,71 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun SectionTitle(
-    text: String,
-    top: androidx.compose.ui.unit.Dp,
-    bottom: androidx.compose.ui.unit.Dp
+private fun MemoStrip(
+    memos: List<CalendarMemo>,
+    memoColorsById: Map<String, Long>,
+    onOpen: () -> Unit
 ) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        memos.forEach { memo ->
+            val color = Color(memoColorsById[memo.id] ?: memo.colorValue)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = color.copy(alpha = 0.16f),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onOpen() }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 4.dp, height = 16.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(color)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = memo.title,
+                        color = Color(0xFF24343D),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
     Text(
         text = text,
         fontSize = 14.sp,
         fontWeight = FontWeight.Bold,
-        color = Color.LightGray,
-        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = top, bottom = bottom)
+        color = Color(0xFF9E9E9E),
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 8.dp)
     )
+}
+
+@Composable
+private fun EmptyHint(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = text, color = Color(0xFFC2C2C2), fontSize = 14.sp)
+    }
 }
 
 @Composable
@@ -400,102 +395,73 @@ private fun StatisticsDialog(
     weeklyData: List<Float>,
     onDismiss: () -> Unit
 ) {
-    var startAnimation by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { startAnimation = true }
-    val animationProgress by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(durationMillis = 320, easing = LinearOutSlowInEasing),
-        label = "chartAnimation"
-    )
-
-    val weekDayNames = listOf("一", "二", "三", "四", "五", "六", "日")
+    val values = if (weeklyData.isEmpty()) List(7) { 0f } else weeklyData
+    val labels = listOf("一", "二", "三", "四", "五", "六", "日")
     val todayIndex = LocalDate.now().dayOfWeek.value - 1
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color.White,
-        title = { Text("本周成就", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold) },
+        title = {
+            Text(
+                text = "本周完成率",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.Black
+            )
+        },
         text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(170.dp)
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
             ) {
-                Text(
-                    "本周完成率",
-                    color = Color.Gray,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .padding(horizontal = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    weeklyData.forEachIndexed { index, dataValue ->
-                        val displayValue = dataValue.coerceAtLeast(0.05f)
-                        val isToday = index == todayIndex
-                        val isFuture = index > todayIndex
-                        val is100Percent = dataValue >= 1f
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Bottom,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            if (!isFuture) {
-                                Text(
-                                    text = "${(dataValue * 100).toInt()}%",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = when {
-                                        is100Percent -> Color(0xFF4CAF50)
+                values.take(7).forEachIndexed { index, value ->
+                    val normalized = value.coerceIn(0f, 1f)
+                    val displayHeight = (110 * normalized.coerceAtLeast(0.04f)).dp
+                    val isToday = index == todayIndex
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom
+                    ) {
+                        Text(
+                            text = "${(normalized * 100).toInt()}%",
+                            fontSize = 10.sp,
+                            color = if (isToday) Color.Black else Color(0xFF777777),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(16.dp)
+                                .height(displayHeight)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    when {
+                                        normalized >= 1f -> Color(0xFF43A047)
                                         isToday -> Color.Black
-                                        else -> Color.Gray
-                                    },
-                                    modifier = Modifier
-                                        .alpha(animationProgress)
-                                        .padding(bottom = 6.dp)
+                                        else -> Color(0xFFDADADA)
+                                    }
                                 )
-                            } else {
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .width(16.dp)
-                                    .height(120.dp * displayValue * animationProgress)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        when {
-                                            isFuture -> Color(0xFFF5F5F5)
-                                            is100Percent -> Color(0xFF4CAF50)
-                                            isToday -> Color.Black
-                                            else -> Color(0xFFE0E0E0)
-                                        }
-                                    )
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(if (isToday) Color.Black else Color.Transparent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = labels[index],
+                                fontSize = 11.sp,
+                                color = if (isToday) Color.White else Color(0xFF777777),
+                                fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isToday) Color.Black else Color.Transparent),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = weekDayNames[index],
-                                    fontSize = 11.sp,
-                                    color = when {
-                                        isToday -> Color.White
-                                        isFuture -> Color(0xFFDDDDDD)
-                                        else -> Color.Gray
-                                    },
-                                    fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Medium
-                                )
-                            }
                         }
                     }
                 }
@@ -503,8 +469,32 @@ private fun StatisticsDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("继续保持", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text(text = "关闭", color = Color.Black, fontWeight = FontWeight.Bold)
             }
         }
     )
+}
+
+private fun LocalDate.toDisplayTitle(): String {
+    val weekday = when (dayOfWeek.value) {
+        1 -> "周一"
+        2 -> "周二"
+        3 -> "周三"
+        4 -> "周四"
+        5 -> "周五"
+        6 -> "周六"
+        else -> "周日"
+    }
+    return "${year}年${monthValue}月${dayOfMonth}日 $weekday"
+}
+
+private fun daySummary(
+    tasks: List<DailyTask>,
+    memos: List<CalendarMemo>,
+    routines: List<DailyRoutine>,
+    selectedDate: LocalDate
+): String {
+    val doneTasks = tasks.count { it.isCompleted }
+    val doneRoutines = routines.count { it.lastCompletedDate == selectedDate }
+    return "${doneTasks}/${tasks.size} 任务 · ${doneRoutines}/${routines.size} 习惯 · ${memos.size} 备忘"
 }

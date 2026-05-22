@@ -1,7 +1,6 @@
 Lcom/example/minitask/MiniTaskApp;
 Lcom/example/minitask/MainActivity;
 Lcom/example/minitask/data/local/AppDatabase$Companion;
-Lcom/example/minitask/core/calendar/LunarDateCache;
 HSPLcom/example/minitask/MiniTaskApp;->onCreate()V
 HSPLcom/example/minitask/MainActivity;->onCreate(Landroid/os/Bundle;)V
 HSPLcom/example/minitask/data/local/AppDatabase$Companion;->getDatabase(Landroid/content/Context;)Lcom/example/minitask/data/local/AppDatabase;

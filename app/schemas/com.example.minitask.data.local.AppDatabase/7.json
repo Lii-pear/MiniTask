@@ -1,0 +1,244 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "420c3772271a3206ab5620f06995bdff",
+    "entities": [
+      {
+        "tableName": "tasks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `priority` TEXT NOT NULL, `isCompleted` INTEGER NOT NULL, `isPinned` INTEGER NOT NULL, `targetDate` TEXT NOT NULL, `orderWeight` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCompleted",
+            "columnName": "isCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isPinned",
+            "columnName": "isPinned",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetDate",
+            "columnName": "targetDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderWeight",
+            "columnName": "orderWeight",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_tasks_targetDate",
+            "unique": false,
+            "columnNames": [
+              "targetDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tasks_targetDate` ON `${TABLE_NAME}` (`targetDate`)"
+          },
+          {
+            "name": "index_tasks_targetDate_isPinned_isCompleted_priority_orderWeight",
+            "unique": false,
+            "columnNames": [
+              "targetDate",
+              "isPinned",
+              "isCompleted",
+              "priority",
+              "orderWeight"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tasks_targetDate_isPinned_isCompleted_priority_orderWeight` ON `${TABLE_NAME}` (`targetDate`, `isPinned`, `isCompleted`, `priority`, `orderWeight`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "memos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `targetDate` TEXT NOT NULL, `colorValue` INTEGER NOT NULL, `isCompleted` INTEGER NOT NULL, `orderWeight` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetDate",
+            "columnName": "targetDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorValue",
+            "columnName": "colorValue",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isCompleted",
+            "columnName": "isCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderWeight",
+            "columnName": "orderWeight",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_memos_targetDate",
+            "unique": false,
+            "columnNames": [
+              "targetDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memos_targetDate` ON `${TABLE_NAME}` (`targetDate`)"
+          },
+          {
+            "name": "index_memos_isCompleted",
+            "unique": false,
+            "columnNames": [
+              "isCompleted"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_memos_isCompleted` ON `${TABLE_NAME}` (`isCompleted`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "routines",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `routineType` TEXT NOT NULL, `repeatValue` TEXT NOT NULL, `startDate` TEXT NOT NULL, `endDate` TEXT, `lastCompletedDate` TEXT, `orderWeight` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "routineType",
+            "columnName": "routineType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "repeatValue",
+            "columnName": "repeatValue",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "startDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "endDate",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lastCompletedDate",
+            "columnName": "lastCompletedDate",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "orderWeight",
+            "columnName": "orderWeight",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_routines_orderWeight",
+            "unique": false,
+            "columnNames": [
+              "orderWeight"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_routines_orderWeight` ON `${TABLE_NAME}` (`orderWeight`)"
+          },
+          {
+            "name": "index_routines_startDate_endDate",
+            "unique": false,
+            "columnNames": [
+              "startDate",
+              "endDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_routines_startDate_endDate` ON `${TABLE_NAME}` (`startDate`, `endDate`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '420c3772271a3206ab5620f06995bdff')"
+    ]
+  }
+}

@@ -28,6 +28,3 @@
     @androidx.room.* <fields>;
     @androidx.room.* <methods>;
 }
-
-# Keep lunar calendar library classes (used across date conversion paths).
--keep class com.nlf.calendar.** { *; }

@@ -11,7 +11,7 @@ import com.example.minitask.data.model.DailyTask
 
 @Database(
     entities = [DailyTask::class, CalendarMemo::class, DailyRoutine::class],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(DateConverters::class)

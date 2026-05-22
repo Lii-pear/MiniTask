@@ -23,7 +23,7 @@ class WeeklyStatsCalculatorTest {
     fun calculatesTaskAndRoutineCompletionRatio() {
         val routine = DailyRoutine(
             title = "Read",
-            routineType = RoutineType.DAILY.storageValue,
+            routineType = RoutineType.DAILY,
             startDate = monday,
             lastCompletedDate = monday
         )

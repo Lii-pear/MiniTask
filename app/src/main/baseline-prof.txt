@@ -3,7 +3,7 @@ Lcom/example/minitask/MainActivity;
 Lcom/example/minitask/viewmodel/TaskViewModel;
 Lcom/example/minitask/data/local/AppDatabase;
 Lcom/example/minitask/data/local/AppDatabase$Companion;
-Lcom/example/minitask/core/calendar/LunarDateCache;
+Lcom/example/minitask/domain/calendar/CalendarGridRules;
 Lcom/example/minitask/ui/components/FlexibleCalendarKt;
 Lcom/example/minitask/ui/components/AddTaskDialogKt;
 Lcom/example/minitask/ui/components/TaskCardKt;
@@ -11,6 +11,4 @@ Lcom/example/minitask/ui/components/MemoManagerDialogKt;
 HSPLcom/example/minitask/MiniTaskApp;->onCreate()V
 HSPLcom/example/minitask/MainActivity;->onCreate(Landroid/os/Bundle;)V
 HSPLcom/example/minitask/data/local/AppDatabase$Companion;->getDatabase(Landroid/content/Context;)Lcom/example/minitask/data/local/AppDatabase;
-HSPLcom/example/minitask/viewmodel/TaskViewModel;-><init>(Landroid/app/Application;)V
-HSPLcom/example/minitask/core/calendar/LunarDateCache;->prewarmMonth(Ljava/time/YearMonth;)V
-HSPLcom/example/minitask/core/calendar/LunarDateCache;->getText(Ljava/time/LocalDate;)Ljava/lang/String;
+HSPLcom/example/minitask/domain/calendar/CalendarGridRules;->buildCells(Lcom/example/minitask/domain/calendar/CalendarDisplayMode;Ljava/time/LocalDate;Ljava/time/YearMonth;Ljava/util/Map;Ljava/time/LocalDate;)Ljava/util/List;

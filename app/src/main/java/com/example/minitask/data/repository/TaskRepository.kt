@@ -9,9 +9,13 @@ import java.time.LocalDate
 interface TaskRepository {
     fun getTasks(date: LocalDate): Flow<List<DailyTask>>
 
+    fun getTasksBetween(startDate: LocalDate, endDate: LocalDate): Flow<List<DailyTask>>
+
     fun getMemos(date: LocalDate): Flow<List<CalendarMemo>>
 
     fun getAllActiveMemos(): Flow<List<CalendarMemo>>
+
+    fun getActiveMemosBetween(startDate: LocalDate, endDate: LocalDate): Flow<List<CalendarMemo>>
 
     fun getRoutines(): Flow<List<DailyRoutine>>
 

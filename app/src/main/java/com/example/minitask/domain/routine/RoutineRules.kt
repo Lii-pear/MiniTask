@@ -9,7 +9,7 @@ object RoutineRules {
         if (date.isBefore(routine.startDate)) return false
         if (routine.endDate != null && date.isAfter(routine.endDate)) return false
 
-        return when (RoutineType.fromStorage(routine.routineType)) {
+        return when (routine.routineType) {
             RoutineType.DAILY -> true
             RoutineType.INTERVAL -> {
                 val daysBetween = ChronoUnit.DAYS.between(routine.startDate, date)
@@ -32,7 +32,5 @@ object RoutineRules {
         return !selectedDate.isAfter(routine.startDate)
     }
 
-    fun endDateBefore(selectedDate: LocalDate): LocalDate {
-        return selectedDate.minusDays(1)
-    }
+    fun endDateBefore(selectedDate: LocalDate): LocalDate = selectedDate.minusDays(1)
 }
